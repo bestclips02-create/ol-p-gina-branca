@@ -148,9 +148,12 @@ export function Studio() {
     const sourceWidth = player.videoWidth || canvas.width, sourceHeight = player.videoHeight || canvas.height;
     const cover = Math.max(canvas.width / sourceWidth, canvas.height / sourceHeight);
     const coverWidth = sourceWidth * cover, coverHeight = sourceHeight * cover;
-    ctx.save(); ctx.filter = `blur(${Math.max(12, Math.round(canvas.width * .025))}px) brightness(.38) ${style.filter}`;
-    ctx.drawImage(player, (canvas.width-coverWidth)/2, (canvas.height-coverHeight)/2, coverWidth, coverHeight); ctx.restore();
     const fillPortrait = canvas.height > canvas.width;
+    const sourceRatio = sourceWidth / sourceHeight, outputRatio = canvas.width / canvas.height;
+    if (!fillPortrait && Math.abs(sourceRatio - outputRatio) > .015) {
+      ctx.save(); ctx.filter = `blur(${Math.max(12, Math.round(canvas.width * .025))}px) brightness(.38) ${style.filter}`;
+      ctx.drawImage(player, (canvas.width-coverWidth)/2, (canvas.height-coverHeight)/2, coverWidth, coverHeight); ctx.restore();
+    }
     const fit = fillPortrait
       ? Math.max(canvas.width / sourceWidth, canvas.height / sourceHeight)
       : Math.min(canvas.width / sourceWidth, canvas.height / sourceHeight);
@@ -211,7 +214,7 @@ export function Studio() {
     paint();
     player.addEventListener("timeupdate", paint); player.addEventListener("seeked", paint); player.addEventListener("play", paint); player.addEventListener("pause", paint);
     return () => { cancelAnimationFrame(frame); player.removeEventListener("timeupdate", paint); player.removeEventListener("seeked", paint); player.removeEventListener("play", paint); player.removeEventListener("pause", paint); };
-  }, [duration, orientation, direction, intensity, effects, manualRange, trimStart, trimEnd, caption, serverName, serverIp, showCaption, showServer]);
+  }, [duration, orientation, direction, intensity, effects, manualRange, trimStart, trimEnd, caption, serverName, serverIp, showCaption, showServer, busy]);
   const generate = async () => {
     const player = videoRef.current, canvas = canvasRef.current;
     if (!player || !canvas || !file || busy) return;
@@ -239,7 +242,7 @@ export function Studio() {
         await new Promise<void>((resolve) => {
           let frame = 0;
           const step = () => {
-            drawFrame(player, canvas, moment, direction, intensity);
+            drawFrame(player, canvas, moment, direction, intensity, effects);
             const part = (player.currentTime - moment.start) / (moment.end - moment.start);
             setProgress(28 + Math.min(71, Math.round(((index + Math.max(0, part)) / moments.length) * 71)));
             if (player.currentTime >= moment.end || player.ended) { player.pause(); if (musicRef.current) musicRef.current.pause(); cancelAnimationFrame(frame); resolve(); return; }
