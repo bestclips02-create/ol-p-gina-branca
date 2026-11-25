@@ -14,7 +14,7 @@ export const Route = createFileRoute("/studio")({
   component: Studio,
 });
 
-function Studio() {
+export function Studio() {
   const [sources, setSources] = useState<Source[]>([]);
   const [activeId, setActiveId] = useState("");
   const [music, setMusic] = useState<File | null>(null);
@@ -122,7 +122,7 @@ function Studio() {
   const sizeLabel = (bytes: number) => bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1,Math.round(bytes/1024))} KB`;
 
   return <main className="studio-app">
-    <header className="studio-top"><a className="studio-brand" href="/"><span className="studio-logo"><Gamepad2/></span><span>INFECTADOZ <b>CLIP STUDIO</b></span></a><div className="server-pin"><span className="online-dot"/><div><small>SERVIDOR CONECTADO</small><strong>{SERVER_NAME}</strong></div><code>{SERVER_IP}</code><LockKeyhole size={15}/></div><a className="exit-studio" href="/">Sair do editor <X size={15}/></a></header>
+    <header className="studio-top"><a className="studio-brand" href="/"><span className="studio-logo"><Gamepad2/></span><span>INFECTADOZ <b>CLIP STUDIO</b></span></a><div className="server-pin"><span className="online-dot"/><div><small>SERVIDOR CONECTADO</small><strong>{SERVER_NAME}</strong></div><code>{SERVER_IP}</code><LockKeyhole size={15}/></div><a className="exit-studio" href="/">Página inicial <X size={15}/></a></header>
     <div className="studio-body"><aside className="studio-side"><div className="side-label">SEU ESTÚDIO</div><div className="side-item side-active"><Clapperboard/> Editor de clips <span>01</span></div><div className="side-tip"><Sparkles/><strong>Pronto para editar?</strong><p>Envie seus gameplays, marque os melhores momentos e crie clips em poucos passos.</p></div><div className="side-format"><span>FORMATO DE EXPORTAÇÃO</span><b>WEBM · RESOLUÇÃO ORIGINAL</b><small>Pronto para compartilhar</small></div></aside>
     <section className="editor-main"><div className="welcome-row"><div><div className="studio-eyebrow">INFECTADOZ / FERRAMENTA DE EDIÇÃO</div><h1>Transforme seu gameplay<br/><em>em clips memoráveis.</em></h1><p>Cortes precisos, áudio equilibrado e identificação do servidor. Tudo direto no navegador.</p></div><div className="welcome-stats"><span><Film/><b>{sources.length.toString().padStart(2,"0")}</b> vídeos</span><span><Scissors/><b>{cuts.length.toString().padStart(2,"0")}</b> cortes</span></div></div>
     <div className="editor-grid"><section className="panel upload-panel"><div className="panel-head"><div><span className="panel-step">01</span><div><h2>Seus vídeos</h2><p>Adicione os gameplays que quer editar.</p></div></div><label className="small-upload"><Plus size={15}/> Adicionar<input type="file" accept="video/*" multiple onChange={(e)=>addFiles(e.currentTarget.files)}/></label></div>
@@ -137,6 +137,7 @@ function Studio() {
     <footer className="studio-footer"><span>Made for the InfectadoZ community <Gamepad2 size={14}/></span><span>O IP do servidor permanece fixo em todos os clips.</span></footer></section></div>
   </main>;
 }
+
 
 
 
