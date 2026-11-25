@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Download, Gamepad2, Music2, Scissors, Sparkles, Upload, Volume2 } from "lucide-react";
+import { Download, Gamepad2, Music2, Pause, Play, Scissors, Sparkles, Upload, Volume2 } from "lucide-react";
 import { CREATIVE_DIRECTIONS, type CreativeDirection } from "./creative-directions";
 import "./clip-studio.css";
 
@@ -18,6 +18,8 @@ export function Studio() {
   const [manualRange, setManualRange] = useState(false);
   const [directionId, setDirectionId] = useState("gamer");
   const [intensity, setIntensity] = useState(58);
+  const [orientation, setOrientation] = useState<"landscape" | "portrait">("landscape");
+  const [previewPlaying, setPreviewPlaying] = useState(false);
   const [caption, setCaption] = useState("Nos vemos no servidor!");
   const [serverName, setServerName] = useState(DEFAULT_SERVER);
   const [serverIp, setServerIp] = useState(DEFAULT_IP);
@@ -34,6 +36,7 @@ export function Studio() {
   const direction = CREATIVE_DIRECTIONS.find((item) => item.id === directionId) ?? CREATIVE_DIRECTIONS[1]!;
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const musicRef = useRef<HTMLAudioElement>(null);
   const audioContext = useRef<AudioContext | null>(null);
   const destination = useRef<MediaStreamAudioDestinationNode | null>(null);
@@ -142,10 +145,16 @@ export function Studio() {
     const zoom = 1 + style.zoom * power * pulse;
     const shakeX = Math.sin(progress * 48) * style.shake * canvas.width * power;
     const shakeY = Math.cos(progress * 39) * style.shake * canvas.height * power;
+    const sourceWidth = player.videoWidth || canvas.width, sourceHeight = player.videoHeight || canvas.height;
+    const cover = Math.max(canvas.width / sourceWidth, canvas.height / sourceHeight);
+    const coverWidth = sourceWidth * cover, coverHeight = sourceHeight * cover;
+    ctx.save(); ctx.filter = `blur(${Math.max(12, Math.round(canvas.width * .025))}px) brightness(.38) ${style.filter}`;
+    ctx.drawImage(player, (canvas.width-coverWidth)/2, (canvas.height-coverHeight)/2, coverWidth, coverHeight); ctx.restore();
+    const contain = Math.min(canvas.width / sourceWidth, canvas.height / sourceHeight);
+    const frameWidth = sourceWidth * contain, frameHeight = sourceHeight * contain;
     ctx.save(); ctx.filter = style.filter;
     ctx.translate(canvas.width / 2 + shakeX, canvas.height / 2 + shakeY); ctx.scale(zoom, zoom);
-    ctx.drawImage(player, -canvas.width / 2, -canvas.height / 2, canvas.width, canvas.height); ctx.restore();
-    if (style.id === "retro" && power > .15) { ctx.save(); ctx.globalAlpha = .08 * power; ctx.fillStyle = "#10100c"; for (let y = 0; y < canvas.height; y += Math.max(3, Math.round(canvas.height / 190))) ctx.fillRect(0, y, canvas.width, 1); ctx.restore(); }
+    ctx.drawImage(player, -frameWidth/2, -frameHeight/2, frameWidth, frameHeight); ctx.restore();    if (style.id === "retro" && power > .15) { ctx.save(); ctx.globalAlpha = .08 * power; ctx.fillStyle = "#10100c"; for (let y = 0; y < canvas.height; y += Math.max(3, Math.round(canvas.height / 190))) ctx.fillRect(0, y, canvas.width, 1); ctx.restore(); }
     const lines = [showCaption && caption.trim(), showServer && [serverName.trim(), serverIp.trim()].filter(Boolean).join("  ·  ")].filter(Boolean) as string[];
     const fade = Math.max(.07, style.fade * (1.2 - power * .55));
     const alpha = Math.min(1, progress / fade, (1 - progress) / fade), enter = Math.max(0, 1 - progress / fade);
@@ -161,6 +170,21 @@ export function Studio() {
     if (fadeOut > 0) { ctx.fillStyle = `rgba(0,0,0,${Math.min(.6, fadeOut * .45 * power)})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
   };
 
+  useEffect(() => {
+    const canvas = previewCanvasRef.current, player = videoRef.current;
+    if (!canvas || !player || !duration) return;
+    canvas.width = orientation === "portrait" ? 720 : 1280;
+    canvas.height = orientation === "portrait" ? 1280 : 720;
+    let frame = 0;
+    const paint = () => {
+      const start = manualRange ? trimStart : 0, end = manualRange ? trimEnd : duration;
+      drawFrame(player, canvas, { start, end, score: 1 }, direction, intensity);
+      if (!player.paused && !player.ended) frame = requestAnimationFrame(paint);
+    };
+    paint();
+    player.addEventListener("timeupdate", paint); player.addEventListener("seeked", paint); player.addEventListener("play", paint); player.addEventListener("pause", paint);
+    return () => { cancelAnimationFrame(frame); player.removeEventListener("timeupdate", paint); player.removeEventListener("seeked", paint); player.removeEventListener("play", paint); player.removeEventListener("pause", paint); };
+  }, [duration, orientation, direction, intensity, manualRange, trimStart, trimEnd, caption, serverName, serverIp, showCaption, showServer]);
   const generate = async () => {
     const player = videoRef.current, canvas = canvasRef.current;
     if (!player || !canvas || !file || busy) return;
@@ -170,7 +194,7 @@ export function Studio() {
       const moments = manualRange ? [{ start: trimStart, end: trimEnd, score: 1 }] : await findMoments(player, direction);
       if (!moments.length) throw new Error("Não encontrei trechos para compilar.");
       setStatus(`Encontrei ${moments.length} momentos. Montando sua compilação…`);
-      canvas.width = player.videoWidth || 1280; canvas.height = player.videoHeight || 720;
+      canvas.width = orientation === "portrait" ? 720 : 1280; canvas.height = orientation === "portrait" ? 1280 : 720;
       const audio = await prepareAudio();
       const stream = canvas.captureStream(30); audio.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
       const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4"].find((type) => MediaRecorder.isTypeSupported(type)) || "";
@@ -208,8 +232,8 @@ export function Studio() {
   return <main className="studio-app">
     <header className="studio-top"><a className="studio-brand" href="/"><span className="studio-logo"><Gamepad2/></span><span>INFECTADOZ <b>CLIP STUDIO</b></span></a><div className="server-pin"><span className="online-dot"/><div><small>SERVIDOR</small><strong>{serverName || DEFAULT_SERVER}</strong></div><code>{serverIp || DEFAULT_IP}</code></div></header>
     <div className="studio-content"><div className="intro"><div className="eyebrow"><Sparkles/> EDIÇÃO DE GAMEPLAY, SEM COMPLICAÇÃO</div><h1>Seu melhor gameplay.<br/><em>Em um clip só.</em></h1><p>Envie o vídeo e escolha: deixar o editor selecionar os melhores momentos ou marcar seu próprio trecho.</p></div>
-      <div className="workspace"><section className="main-column"><div className="card video-card"><div className="card-heading"><div><span className="step">01</span><div><h2>Seu vídeo</h2><p>Envie um gameplay para começar.</p></div></div>{file&&<button className="replace-video" onClick={()=>document.getElementById("gameplay-file")?.click()}><Upload/> Trocar vídeo</button>}</div><input id="gameplay-file" className="file-hidden" type="file" accept="video/*" onChange={(e)=>chooseFile(e.currentTarget.files?.[0])}/>
-      {videoUrl?<div className="preview-wrap"><video ref={videoRef} src={videoUrl} controls style={{filter:direction.filter}} onLoadedMetadata={(e)=>{const length=e.currentTarget.duration;setDuration(length);setTrimStart(0);setTrimEnd(length);setPlayhead(0);}} onTimeUpdate={(e)=>setPlayhead(e.currentTarget.currentTime)}/>{(showCaption||showServer)&&<div className="preview-overlay" style={{borderColor:`${direction.accent}66`}}>{showCaption&&caption&&<b style={{color:direction.accent}}>{caption}</b>}{showServer&&<span>{serverName||DEFAULT_SERVER}{serverIp&&` · ${serverIp}`}</span>}</div>}<canvas ref={canvasRef} className="hidden-canvas"/></div>:<label className="drop-zone" htmlFor="gameplay-file" onDragOver={(e)=>e.preventDefault()} onDrop={(e)=>{e.preventDefault();chooseFile(e.dataTransfer.files[0]);}}><span className="upload-icon"><Upload/></span><b>Arraste seu vídeo para cá</b><span>ou <u>escolha um arquivo</u></span><small>MP4, MOV ou WebM</small></label>}
+      <div className="workspace"><section className="main-column"><div className="card video-card"><div className="card-heading"><div><span className="step">01</span><div><h2>Seu vídeo</h2><p>Envie um gameplay para começar.</p></div></div>{file&&<button className="replace-video" onClick={()=>document.getElementById("gameplay-file")?.click()}><Upload/> Trocar vídeo</button>}</div><input id="gameplay-file" className="file-hidden" type="file" accept="video/*" onChange={(e)=>chooseFile(e.currentTarget.files?.[0])}/><div className="format-picker" role="group" aria-label="Formato do vídeo"><span>FORMATO</span><button type="button" aria-pressed={orientation==="landscape"} className={orientation==="landscape"?"format-active":""} onClick={()=>setOrientation("landscape")}>Horizontal <small>16:9</small></button><button type="button" aria-pressed={orientation==="portrait"} className={orientation==="portrait"?"format-active":""} onClick={()=>setOrientation("portrait")}>Vertical <small>9:16</small></button></div>
+      {videoUrl?<div className={orientation==="portrait"?"preview-wrap portrait-preview":"preview-wrap"}><canvas ref={previewCanvasRef} className="preview-canvas"/><video ref={videoRef} src={videoUrl} className="source-video" onLoadedMetadata={(e)=>{const length=e.currentTarget.duration;setDuration(length);setTrimStart(0);setTrimEnd(length);setPlayhead(0);}} onTimeUpdate={(e)=>setPlayhead(e.currentTarget.currentTime)} onPlay={()=>setPreviewPlaying(true)} onPause={()=>setPreviewPlaying(false)}/><button className="preview-toggle" aria-label={previewPlaying?"Pausar prévia":"Reproduzir prévia"} onClick={()=>{const player=videoRef.current;if(player){if(player.paused)void player.play();else player.pause();}}}>{previewPlaying?<Pause/>:<Play/>}</button><div className="preview-controls"><span>{timeLabel(playhead)} / {timeLabel(duration)}</span><input aria-label="Posição da prévia" type="range" min="0" max={duration||1} step="0.1" value={Math.min(playhead,duration||0)} onChange={(e)=>{if(videoRef.current)videoRef.current.currentTime=Number(e.currentTarget.value);}}/></div><canvas ref={canvasRef} className="hidden-canvas"/></div>:<label className="drop-zone" htmlFor="gameplay-file" onDragOver={(e)=>e.preventDefault()} onDrop={(e)=>{e.preventDefault();chooseFile(e.dataTransfer.files[0]);}}><span className="upload-icon"><Upload/></span><b>Arraste seu vídeo para cá</b><span>ou <u>escolha um arquivo</u></span><small>MP4, MOV ou WebM</small></label>}
       {file&&duration>0&&<section className="trim-panel"><div className="trim-head"><div><b>Escolha o trecho</b><small>Arraste os marcadores como no WhatsApp para definir início e fim.</small></div><span>{timeLabel(trimEnd-trimStart)} selecionados</span></div><div className="trim-track"><div className="trim-active" style={{left:`${trimStart/duration*100}%`,width:`${(trimEnd-trimStart)/duration*100}%`}}/><div className="trim-playhead" style={{left:`${playhead/duration*100}%`}}/><input aria-label="Início do trecho" className="trim-range trim-range-start" type="range" min="0" max={Math.max(0,duration-0.5)} step="0.1" value={trimStart} onPointerDown={()=>videoRef.current?.pause()} onChange={(e)=>{const value=Math.min(Number(e.currentTarget.value),trimEnd-0.5);setTrimStart(Math.max(0,value));if(videoRef.current)videoRef.current.currentTime=Math.max(0,value);}}/><input aria-label="Fim do trecho" className="trim-range trim-range-end" type="range" min={Math.min(duration,trimStart+0.5)} max={duration} step="0.1" value={trimEnd} onPointerDown={()=>videoRef.current?.pause()} onChange={(e)=>{const value=Math.max(Number(e.currentTarget.value),trimStart+0.5);setTrimEnd(Math.min(duration,value));if(videoRef.current)videoRef.current.currentTime=Math.min(duration,value);}}/></div><div className="trim-times"><span>INÍCIO <b>{timeLabel(trimStart)}</b></span><span>FIM <b>{timeLabel(trimEnd)}</b></span></div><label className="manual-toggle"><input type="checkbox" checked={manualRange} onChange={(e)=>setManualRange(e.target.checked)}/><span>Usar exatamente o trecho selecionado (sem seleção automática)</span></label></section>}{file&&<div className="file-info"><span><strong>{file.name}</strong><small>{duration?`${timeLabel(duration)} · `:""}{(file.size/1024/1024).toFixed(1)} MB</small></span><button aria-label="Remover vídeo" onClick={()=>setFile(null)}>×</button></div>}
       </div><div className="card generate-card"><div className="generate-explain"><span className="magic-icon"><Scissors/></span><div><b>{busy?"Trabalhando no seu vídeo…":"Compilação automática"}</b><small>{busy?status:"Vamos analisar o vídeo inteiro e selecionar os melhores momentos."}</small></div></div><button className="generate-button" disabled={!file||!duration||busy} onClick={generate}>{busy?<><span className="spinner"/> {progress}%</>:<><Sparkles/> Gerar minha compilação</>}</button>{busy&&<div className="progress-track"><span style={{width:`${progress}%`}}/></div>}{!busy&&status&&<p className="result-status">{status}</p>}</div>
       {output&&<section className="card result-card"><div className="card-heading"><div><span className="step complete">✓</span><div><h2>Sua compilação está pronta</h2><p>Os melhores momentos, reunidos em um vídeo.</p></div></div></div><video src={output} controls/><a className="download-button" href={output} download={outputName}><Download/> Baixar compilação</a></section>}
@@ -219,6 +243,7 @@ export function Studio() {
     </div>
   </main>;
 }
+
 
 
 
