@@ -17,7 +17,8 @@ export function Studio() {
   const [playhead, setPlayhead] = useState(0);
   const [manualRange, setManualRange] = useState(false);
   const [directionId, setDirectionId] = useState("gamer");
-  const [intensity, setIntensity] = useState(72);\n  const [effects, setEffects] = useState({ zoom: true, shake: true, fades: true, glowText: false });
+  const [intensity, setIntensity] = useState(72);
+  const [effects, setEffects] = useState({ zoom: true, shake: true, fades: true, glowText: false });
   const [orientation, setOrientation] = useState<"landscape" | "portrait">("landscape");
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [caption, setCaption] = useState("Nos vemos no servidor!");
@@ -92,13 +93,16 @@ export function Studio() {
       setProgress(Math.min(28, Math.round(((time - rangeStart) / length) * 28)));
     }
     const scored: { time: number; score: number }[] = [];
+    const channel = (pixels: Uint8ClampedArray, index: number) => pixels[index] ?? 0;
     for (let i = 1; i < frames.length; i++) {
-      const before = frames[i - 1].pixels, after = frames[i].pixels;
+      const previous = frames[i - 1], current = frames[i];
+      if (!previous || !current) continue;
+      const before = previous.pixels, after = current.pixels;
       let difference = 0;
       for (let p = 0; p < after.length; p += 16) {
-        difference += Math.abs(after[p] - before[p]) + Math.abs(after[p + 1] - before[p + 1]) + Math.abs(after[p + 2] - before[p + 2]);
+        difference += Math.abs(channel(after, p) - channel(before, p)) + Math.abs(channel(after, p + 1) - channel(before, p + 1)) + Math.abs(channel(after, p + 2) - channel(before, p + 2));
       }
-      scored.push({ time: frames[i].time, score: difference / (after.length / 16 * 3 * 255) });
+      scored.push({ time: current.time, score: difference / (after.length / 16 * 3 * 255) });
     }
     const clipLength = Math.min(style.maxClip, Math.max(style.minClip, length / Math.min(4, Math.max(1, Math.round(length / style.maxClip)))));
     const pace = style.pace * (1.25 - intensity / 100 * 0.5);
@@ -188,7 +192,8 @@ export function Studio() {
       const lineGap = Math.round(7 * scale), rowHeight = fontSize + lineGap;
       const height = rows.length * rowHeight + pad * 1.5;
       const x = (canvas.width - width) / 2 + enter * 10 * scale, y = canvas.height - height - (portrait ? canvas.height * .055 : pad);
-      ctx.fillStyle = effectOptions.glowText ? "rgba(7,12,9,.62)" : "rgba(7,12,9,.84)"; ctx.beginPath(); ctx.roundRect(x, y, width, height, 10 * scale); ctx.fill();\n      if (effectOptions.glowText) { ctx.strokeStyle = style.accent; ctx.lineWidth = Math.max(1, 1.5 * scale); ctx.shadowColor = style.accent; ctx.shadowBlur = 16 * scale; ctx.stroke(); ctx.shadowBlur = 0; }
+      ctx.fillStyle = effectOptions.glowText ? "rgba(7,12,9,.62)" : "rgba(7,12,9,.84)"; ctx.beginPath(); ctx.roundRect(x, y, width, height, 10 * scale); ctx.fill();
+      if (effectOptions.glowText) { ctx.strokeStyle = style.accent; ctx.lineWidth = Math.max(1, 1.5 * scale); ctx.shadowColor = style.accent; ctx.shadowBlur = 16 * scale; ctx.stroke(); ctx.shadowBlur = 0; }
       rows.forEach((row, index) => {
         ctx.fillStyle = row.accent ? style.accent : "#ffffff";
         ctx.textAlign = "left";
@@ -235,7 +240,10 @@ export function Studio() {
       recorder.start(300);
       for (let index = 0; index < moments.length; index++) {
         if (index > 0) { recorder.pause(); player.pause(); if (musicRef.current) musicRef.current.pause(); }
-        const moment = moments[index]; await seek(player, moment.start); drawFrame(player, canvas, moment, direction, intensity, effects);
+        const moment = moments[index];
+        if (!moment) continue;
+        await seek(player, moment.start);
+        drawFrame(player, canvas, moment, direction, intensity, effects);
         if (index > 0) recorder.resume();
         if (musicFile && musicRef.current) { if (index === 0) musicRef.current.currentTime = 0; await musicRef.current.play().catch(() => {}); }
         await player.play();
