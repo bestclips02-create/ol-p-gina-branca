@@ -150,8 +150,11 @@ export function Studio() {
     const coverWidth = sourceWidth * cover, coverHeight = sourceHeight * cover;
     ctx.save(); ctx.filter = `blur(${Math.max(12, Math.round(canvas.width * .025))}px) brightness(.38) ${style.filter}`;
     ctx.drawImage(player, (canvas.width-coverWidth)/2, (canvas.height-coverHeight)/2, coverWidth, coverHeight); ctx.restore();
-    const contain = Math.min(canvas.width / sourceWidth, canvas.height / sourceHeight);
-    const frameWidth = sourceWidth * contain, frameHeight = sourceHeight * contain;
+    const fillPortrait = canvas.height > canvas.width;
+    const fit = fillPortrait
+      ? Math.max(canvas.width / sourceWidth, canvas.height / sourceHeight)
+      : Math.min(canvas.width / sourceWidth, canvas.height / sourceHeight);
+    const frameWidth = sourceWidth * fit, frameHeight = sourceHeight * fit;
     ctx.save(); ctx.filter = style.filter;
     ctx.translate(canvas.width / 2 + shakeX, canvas.height / 2 + shakeY); ctx.scale(zoom, zoom);
     ctx.drawImage(player, -frameWidth/2, -frameHeight/2, frameWidth, frameHeight); ctx.restore();    if (style.id === "retro" && power > .15) { ctx.save(); ctx.globalAlpha = .08 * power; ctx.fillStyle = "#10100c"; for (let y = 0; y < canvas.height; y += Math.max(3, Math.round(canvas.height / 190))) ctx.fillRect(0, y, canvas.width, 1); ctx.restore(); }
