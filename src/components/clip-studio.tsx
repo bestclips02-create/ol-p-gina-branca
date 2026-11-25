@@ -170,7 +170,7 @@ export function Studio() {
       ctx.save(); ctx.globalAlpha = Math.max(0, alpha); ctx.font = `600 ${fontSize}px ${style.font}`;
       const maxLineWidth = canvas.width * (portrait ? .9 : .78) - pad * 2;
       const wrap = (text: string, accent: boolean) => {
-        const words = text.split(/\\s+/).filter(Boolean), rows: { text: string; accent: boolean }[] = [];
+        const words = text.split(/\s+/).filter(Boolean), rows: { text: string; accent: boolean }[] = [];
         let row = "";
         for (const word of words) {
           const candidate = row ? `${row} ${word}` : word;
