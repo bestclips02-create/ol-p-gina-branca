@@ -1,140 +1,203 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { AudioLines, Check, ChevronDown, Clapperboard, Download, Film, Gamepad2, HardDrive, LockKeyhole, Music2, Pause, Play, Plus, Scissors, Server, Sparkles, Upload, Volume2, X } from "lucide-react";
+import { Download, Gamepad2, Music2, Scissors, Sparkles, Upload, Volume2 } from "lucide-react";
 import "./studio.css";
 
-type Source = { id: string; file: File; url: string; duration: number };
-type Cut = { id: string; sourceId: string; start: number; end: number };
-type Exported = { id: string; name: string; url: string; size: number };
-const SERVER_NAME = "InfectadoZ";
-const SERVER_IP = "89.39.161.172:27105";
+const DEFAULT_SERVER = "InfectadoZ";
+const DEFAULT_IP = "89.39.161.172:27105";
+
+type Moment = { start: number; end: number; score: number };
 
 export const Route = createFileRoute("/studio")({
-  head: () => ({ meta: [{ title: "InfectadoZ Clip Studio" }, { name: "description", content: "Crie cortes dos seus vídeos de gameplay com mixagem de áudio e identificação do servidor." }] }),
+  head: () => ({ meta: [{ title: "InfectadoZ Clip Studio" }, { name: "description", content: "Transforme seus vídeos de gameplay em compilações de momentos intensos." }] }),
   component: Studio,
 });
 
 export function Studio() {
-  const [sources, setSources] = useState<Source[]>([]);
-  const [activeId, setActiveId] = useState("");
-  const [music, setMusic] = useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [videoUrl, setVideoUrl] = useState("");
+  const [duration, setDuration] = useState(0);
+  const [caption, setCaption] = useState("Nos vemos no servidor!");
+  const [serverName, setServerName] = useState(DEFAULT_SERVER);
+  const [serverIp, setServerIp] = useState(DEFAULT_IP);
+  const [showCaption, setShowCaption] = useState(true);
+  const [showServer, setShowServer] = useState(true);
   const [gameVolume, setGameVolume] = useState(100);
   const [musicVolume, setMusicVolume] = useState(12);
-  const [visualEffect, setVisualEffect] = useState("none");
-  const [start, setStart] = useState(0);
-  const [end, setEnd] = useState(0);
-  const [cuts, setCuts] = useState<Cut[]>([]);
-  const [exports, setExports] = useState<Exported[]>([]);
+  const [musicFile, setMusicFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [message, setMessage] = useState("");
+  const [status, setStatus] = useState("");
+  const [output, setOutput] = useState("");
+  const [outputName, setOutputName] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const contextRef = useRef<AudioContext | null>(null);
-  const gameGainRef = useRef<GainNode | null>(null);
-  const musicGainRef = useRef<GainNode | null>(null);
-  const destinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
-  const videoNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const musicNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const active = sources.find((item) => item.id === activeId);
+  const musicRef = useRef<HTMLAudioElement>(null);
+  const audioContext = useRef<AudioContext | null>(null);
+  const destination = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const gameGain = useRef<GainNode | null>(null);
+  const musicGain = useRef<GainNode | null>(null);
+  const videoAudio = useRef<MediaElementAudioSourceNode | null>(null);
+  const musicAudio = useRef<MediaElementAudioSourceNode | null>(null);
 
-  useEffect(() => () => { sources.forEach((item) => URL.revokeObjectURL(item.url)); }, []);
-  useEffect(() => { if (active) { setStart(0); setEnd(active.duration); } }, [activeId]);
-  useEffect(() => { if (videoRef.current && active) videoRef.current.src = active.url; }, [activeId, active?.url]);
-  useEffect(() => { const url = music ? URL.createObjectURL(music) : ""; if (audioRef.current) audioRef.current.src = url; return () => { if (url) URL.revokeObjectURL(url); }; }, [music]);
-  useEffect(() => { if (gameGainRef.current) gameGainRef.current.gain.value = gameVolume / 100; }, [gameVolume]);
-  useEffect(() => { if (musicGainRef.current) musicGainRef.current.gain.value = musicVolume / 100; }, [musicVolume]);
+  useEffect(() => {
+    const url = file ? URL.createObjectURL(file) : "";
+    setVideoUrl(url);
+    setDuration(0);
+    setOutput("");
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [file]);
+  useEffect(() => {
+    const url = musicFile ? URL.createObjectURL(musicFile) : "";
+    if (musicRef.current) musicRef.current.src = url;
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [musicFile]);
+  useEffect(() => { if (gameGain.current) gameGain.current.gain.value = gameVolume / 100; }, [gameVolume]);
+  useEffect(() => { if (musicGain.current) musicGain.current.gain.value = musicVolume / 100; }, [musicVolume]);
+  useEffect(() => () => { if (output) URL.revokeObjectURL(output); }, [output]);
+  useEffect(() => () => { if (audioContext.current) void audioContext.current.close(); }, []);
 
-  const addFiles = (list: FileList | null) => {
-    if (!list) return;
-    const next = Array.from(list).filter((file) => file.type.startsWith("video/")).map((file) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file), duration: 0 }));
-    if (next.length) { setSources((old) => [...old, ...next]); setActiveId((old) => old || next[0].id); setMessage(""); }
-    else setMessage("Selecione um arquivo de vídeo válido.");
+  const chooseFile = (selected?: File) => {
+    if (selected?.type.startsWith("video/")) { setFile(selected); setStatus(""); }
+    else if (selected) setStatus("Escolha um arquivo de vídeo válido.");
   };
-  const loadedMetadata = () => {
-    const player = videoRef.current;
-    if (!player || !active) return;
-    const duration = Number.isFinite(player.duration) ? player.duration : 0;
-    setSources((old) => old.map((item) => item.id === active.id ? { ...item, duration } : item));
-    setEnd(duration);
-  };
-  const setupAudio = async () => {
-    const ctx = contextRef.current ?? new AudioContext(); contextRef.current = ctx;
-    if (!destinationRef.current) {
-      const dest = ctx.createMediaStreamDestination();
-      const gameGain = ctx.createGain(); gameGain.gain.value = gameVolume / 100; gameGain.connect(dest); gameGain.connect(ctx.destination);
-      const musicGain = ctx.createGain(); musicGain.gain.value = musicVolume / 100; musicGain.connect(dest); musicGain.connect(ctx.destination);
-      destinationRef.current = dest; gameGainRef.current = gameGain; musicGainRef.current = musicGain;
-      [110, 164.81, 220].forEach((frequency, index) => { const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = index === 1 ? "sine" : "triangle"; osc.frequency.value = frequency; gain.gain.value = index === 0 ? 0.12 : 0.045; osc.connect(gain); gain.connect(musicGain); osc.start(); });
-    }
-    if (videoRef.current && !videoNodeRef.current) { videoNodeRef.current = ctx.createMediaElementSource(videoRef.current); videoNodeRef.current.connect(gameGainRef.current!); }
-    if (audioRef.current && music && !musicNodeRef.current) { musicNodeRef.current = ctx.createMediaElementSource(audioRef.current); musicNodeRef.current.connect(musicGainRef.current!); }
-    await ctx.resume(); return destinationRef.current!;
-  };
-  const waitFor = (el: HTMLVideoElement, event: "loadeddata" | "seeked") => new Promise<void>((resolve, reject) => {
-    const done = () => { el.removeEventListener(event, done); el.removeEventListener("error", fail); resolve(); };
-    const fail = () => { el.removeEventListener(event, done); reject(new Error("Não foi possível ler o vídeo.")); };
-    el.addEventListener(event, done, { once: true }); el.addEventListener("error", fail, { once: true });
+  const timeLabel = (value: number) => `${Math.floor(value / 60)}:${Math.floor(value % 60).toString().padStart(2, "0")}`;
+  const seek = (player: HTMLVideoElement, time: number) => new Promise<void>((resolve, reject) => {
+    if (Math.abs(player.currentTime - time) < 0.06) { resolve(); return; }
+    const done = () => { player.removeEventListener("seeked", done); player.removeEventListener("error", fail); resolve(); };
+    const fail = () => { player.removeEventListener("seeked", done); reject(new Error("Não foi possível analisar esse vídeo.")); };
+    player.addEventListener("seeked", done, { once: true }); player.addEventListener("error", fail, { once: true }); player.currentTime = time;
   });
-  const renderCut = async (cut: Cut, index: number, total: number, destination: MediaStreamAudioDestinationNode) => {
-    const player = videoRef.current; const canvas = canvasRef.current; const source = sources.find((item) => item.id === cut.sourceId);
-    if (!player || !canvas || !source) throw new Error("Vídeo não encontrado.");
-    if (player.src !== source.url) { const ready = waitFor(player, "loadeddata"); player.src = source.url; await ready; }
-    canvas.width = player.videoWidth || 1280; canvas.height = player.videoHeight || 720;
-    const stream = canvas.captureStream(30); destination.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
-    const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((type) => MediaRecorder.isTypeSupported(type)) || "";
-    const recorder = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 8_000_000 } : undefined); const chunks: BlobPart[] = [];
-    recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
-    const finished = new Promise<Blob>((resolve, reject) => { recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || "video/webm" })); recorder.onerror = () => reject(new Error("Falha ao codificar este corte.")); });
-    if (Math.abs(player.currentTime - cut.start) > 0.05) { const seeked = waitFor(player, "seeked"); player.currentTime = cut.start; await seeked; }
-    if (music && audioRef.current) { audioRef.current.currentTime = 0; await audioRef.current.play().catch(() => {}); }
-    let animation = 0;
-    const paint = () => {
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.filter = visualEffect; ctx.drawImage(player, 0, 0, canvas.width, canvas.height); ctx.filter = "none";
-        const scale = canvas.width / 1280, pad = Math.round(28 * scale), boxW = Math.round(345 * scale), boxH = Math.round(66 * scale), x = canvas.width - boxW - pad, y = canvas.height - boxH - pad;
-        ctx.fillStyle = "rgba(5,9,13,.78)"; ctx.beginPath(); ctx.roundRect(x, y, boxW, boxH, 12 * scale); ctx.fill();
-        ctx.fillStyle = "#a7ef55"; ctx.font = `700 ${Math.round(18 * scale)}px Arial`; ctx.fillText(SERVER_NAME.toUpperCase(), x + pad * .6, y + 25 * scale);
-        ctx.fillStyle = "#fff"; ctx.font = `500 ${Math.round(16 * scale)}px Arial`; ctx.fillText(SERVER_IP, x + pad * .6, y + 49 * scale);
+
+  const findMoments = async (player: HTMLVideoElement): Promise<Moment[]> => {
+    const length = player.duration;
+    if (length <= 16) return [{ start: 0, end: length, score: 1 }];
+    const sample = document.createElement("canvas"); sample.width = 48; sample.height = 27;
+    const context = sample.getContext("2d", { willReadFrequently: true });
+    if (!context) return [{ start: 0, end: Math.min(length, 14), score: 1 }];
+    const interval = Math.max(0.65, Math.min(1.6, length / 110));
+    const frames: { time: number; pixels: Uint8ClampedArray }[] = [];
+    for (let time = 0; time < length - 0.1; time += interval) {
+      await seek(player, time);
+      context.drawImage(player, 0, 0, sample.width, sample.height);
+      frames.push({ time, pixels: context.getImageData(0, 0, sample.width, sample.height).data });
+      setProgress(Math.min(28, Math.round((time / length) * 28)));
+    }
+    const scored: { time: number; score: number }[] = [];
+    for (let i = 1; i < frames.length; i++) {
+      const before = frames[i - 1].pixels, after = frames[i].pixels;
+      let difference = 0;
+      for (let p = 0; p < after.length; p += 16) {
+        difference += Math.abs(after[p] - before[p]) + Math.abs(after[p + 1] - before[p + 1]) + Math.abs(after[p + 2] - before[p + 2]);
       }
-      const ratio = Math.min(1, Math.max(0, (player.currentTime - cut.start) / (cut.end - cut.start)));
-      setProgress(Math.round(((index + ratio) / total) * 100));
-      if (player.currentTime >= cut.end || player.ended) { player.pause(); recorder.stop(); if (audioRef.current) audioRef.current.pause(); cancelAnimationFrame(animation); return; }
-      animation = requestAnimationFrame(paint);
-    };
-    recorder.start(250); await player.play(); paint(); const blob = await finished; stream.getTracks().forEach((track) => track.stop());
-    return { id: crypto.randomUUID(), name: `${source.file.name.replace(/\.[^.]+$/, "")}-corte-${index + 1}.webm`, url: URL.createObjectURL(blob), size: blob.size };
+      scored.push({ time: frames[i].time, score: difference / (after.length / 16 * 3 * 255) });
+    }
+    const clipLength = Math.min(13, Math.max(6, length / Math.min(4, Math.max(1, Math.round(length / 30)))));
+    const target = Math.min(5, Math.max(1, Math.round(length / 27)));
+    const ranked = scored.map((item, i) => ({ ...item, score: (scored[i - 1]?.score || 0) * 0.2 + item.score * 0.6 + (scored[i + 1]?.score || 0) * 0.2 })).sort((a,b) => b.score - a.score);
+    const chosen: Moment[] = [];
+    for (const peak of ranked) {
+      const start = Math.max(0, Math.min(length - clipLength, peak.time - clipLength * 0.36));
+      if (chosen.every((item) => start > item.end + 2 || start + clipLength < item.start - 2)) chosen.push({ start, end: Math.min(length, start + clipLength), score: peak.score });
+      if (chosen.length === target) break;
+    }
+    if (chosen.length < target) {
+      for (let i = 0; i < target; i++) {
+        const start = (length - clipLength) * (i + 0.5) / target;
+        if (chosen.every((item) => start > item.end + 2 || start + clipLength < item.start - 2)) chosen.push({ start, end: start + clipLength, score: 0 });
+      }
+    }
+    return chosen.sort((a,b) => a.start - b.start);
   };
+
+  const prepareAudio = async () => {
+    const player = videoRef.current;
+    if (!player) throw new Error("Envie um vídeo para começar.");
+    const ctx = audioContext.current ?? new AudioContext(); audioContext.current = ctx;
+    if (!destination.current) {
+      const dest = ctx.createMediaStreamDestination();
+      const game = ctx.createGain(); game.gain.value = gameVolume / 100; game.connect(dest); game.connect(ctx.destination);
+      const music = ctx.createGain(); music.gain.value = musicVolume / 100; music.connect(dest); music.connect(ctx.destination);
+      destination.current = dest; gameGain.current = game; musicGain.current = music;
+      [110, 164.81, 220].forEach((frequency, index) => { const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = index === 1 ? "sine" : "triangle"; osc.frequency.value = frequency; gain.gain.value = index ? 0.012 : 0.025; osc.connect(gain); gain.connect(music); osc.start(); });
+    }
+    if (!videoAudio.current) { videoAudio.current = ctx.createMediaElementSource(player); videoAudio.current.connect(gameGain.current!); }
+    if (musicFile && musicRef.current && !musicAudio.current) { musicAudio.current = ctx.createMediaElementSource(musicRef.current); musicAudio.current.connect(musicGain.current!); }
+    await ctx.resume();
+    return destination.current!;
+  };
+
+  const drawFrame = (player: HTMLVideoElement, canvas: HTMLCanvasElement) => {
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(player, 0, 0, canvas.width, canvas.height);
+    const lines = [showCaption && caption.trim(), showServer && [serverName.trim(), serverIp.trim()].filter(Boolean).join("  ·  ")].filter(Boolean) as string[];
+    if (!lines.length) return;
+    const scale = Math.min(canvas.width / 1280, 1.5), pad = Math.round(22 * scale), fontSize = Math.max(12, Math.round(20 * scale));
+    ctx.font = `600 ${fontSize}px Arial`;
+    const width = Math.min(canvas.width * 0.82, Math.max(...lines.map((line) => ctx.measureText(line).width)) + pad * 2);
+    const height = lines.length * (fontSize + 8 * scale) + pad * 1.5;
+    const x = pad, y = canvas.height - height - pad;
+    ctx.fillStyle = "rgba(7,12,9,.78)"; ctx.beginPath(); ctx.roundRect(x, y, width, height, 10 * scale); ctx.fill();
+    lines.forEach((line, index) => { ctx.fillStyle = index === 0 && lines.length > 1 ? "#a7ef55" : "#ffffff"; ctx.fillText(line, x + pad, y + pad + fontSize + index * (fontSize + 8 * scale), width - pad * 2); });
+  };
+
   const generate = async () => {
-    if (!cuts.length || busy) return;
-    setBusy(true); setProgress(0); setMessage("");
+    const player = videoRef.current, canvas = canvasRef.current;
+    if (!player || !canvas || !file || busy) return;
+    setBusy(true); setProgress(0); setOutput(""); setStatus("Analisando o vídeo completo para encontrar os momentos mais movimentados…");
     try {
-      const destination = await setupAudio(), made: Exported[] = [];
-      for (let index = 0; index < cuts.length; index++) made.push(await renderCut(cuts[index], index, cuts.length, destination));
-      setExports((old) => [...made, ...old]); setCuts([]); setProgress(100); setMessage(`${made.length} clipe${made.length > 1 ? "s foram gerados" : " foi gerado"}. Baixe abaixo.`);
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível gerar os vídeos. Tente em outro navegador."); }
+      player.pause();
+      const moments = await findMoments(player);
+      if (!moments.length) throw new Error("Não encontrei trechos para compilar.");
+      setStatus(`Encontrei ${moments.length} momentos. Montando sua compilação…`);
+      canvas.width = player.videoWidth || 1280; canvas.height = player.videoHeight || 720;
+      const audio = await prepareAudio();
+      const stream = canvas.captureStream(30); audio.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
+      const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4"].find((type) => MediaRecorder.isTypeSupported(type)) || "";
+      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 8_000_000 } : undefined);
+      const chunks: BlobPart[] = [];
+      recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+      const finished = new Promise<Blob>((resolve, reject) => { recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || "video/webm" })); recorder.onerror = () => reject(new Error("Falha ao gerar a compilação.")); });
+      recorder.start(300);
+      for (let index = 0; index < moments.length; index++) {
+        if (index > 0) { recorder.pause(); player.pause(); if (musicRef.current) musicRef.current.pause(); }
+        const moment = moments[index]; await seek(player, moment.start); drawFrame(player, canvas);
+        if (index > 0) recorder.resume();
+        if (musicFile && musicRef.current) { if (index === 0) musicRef.current.currentTime = 0; await musicRef.current.play().catch(() => {}); }
+        await player.play();
+        await new Promise<void>((resolve) => {
+          let frame = 0;
+          const step = () => {
+            drawFrame(player, canvas);
+            const part = (player.currentTime - moment.start) / (moment.end - moment.start);
+            setProgress(28 + Math.min(71, Math.round(((index + Math.max(0, part)) / moments.length) * 71)));
+            if (player.currentTime >= moment.end || player.ended) { player.pause(); if (musicRef.current) musicRef.current.pause(); cancelAnimationFrame(frame); resolve(); return; }
+            frame = requestAnimationFrame(step);
+          };
+          frame = requestAnimationFrame(step);
+        });
+      }
+      if (recorder.state !== "inactive") recorder.stop();
+      if (musicRef.current) musicRef.current.pause();
+      const blob = await finished; stream.getTracks().forEach((track) => track.stop());
+      setOutput(URL.createObjectURL(blob)); const extension = blob.type.includes("mp4") ? "mp4" : "webm"; setOutputName(`${file.name.replace(/\.[^.]+$/, "")}-infectadoz-clips.${extension}`); setProgress(100); setStatus(`Compilação pronta com ${moments.length} momentos selecionados automaticamente.`);
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Não foi possível gerar. Tente um vídeo MP4 ou WebM."); }
     finally { setBusy(false); }
   };
-  const removeSource = (id: string) => { const removed = sources.find((item) => item.id === id); if (removed) URL.revokeObjectURL(removed.url); const remaining = sources.filter((item) => item.id !== id); setSources(remaining); setCuts((old) => old.filter((cut) => cut.sourceId !== id)); if (activeId === id) setActiveId(remaining[0]?.id || ""); };
-  const formatTime = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2,"0")}:${Math.floor(seconds % 60).toString().padStart(2,"0")}`;
-  const sizeLabel = (bytes: number) => bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1,Math.round(bytes/1024))} KB`;
 
   return <main className="studio-app">
-    <header className="studio-top"><a className="studio-brand" href="/"><span className="studio-logo"><Gamepad2/></span><span>INFECTADOZ <b>CLIP STUDIO</b></span></a><div className="server-pin"><span className="online-dot"/><div><small>SERVIDOR CONECTADO</small><strong>{SERVER_NAME}</strong></div><code>{SERVER_IP}</code><LockKeyhole size={15}/></div><a className="exit-studio" href="/">Página inicial <X size={15}/></a></header>
-    <div className="studio-body"><aside className="studio-side"><div className="side-label">SEU ESTÚDIO</div><div className="side-item side-active"><Clapperboard/> Editor de clips <span>01</span></div><div className="side-tip"><Sparkles/><strong>Pronto para editar?</strong><p>Envie seus gameplays, marque os melhores momentos e crie clips em poucos passos.</p></div><div className="side-format"><span>FORMATO DE EXPORTAÇÃO</span><b>WEBM · RESOLUÇÃO ORIGINAL</b><small>Pronto para compartilhar</small></div></aside>
-    <section className="editor-main"><div className="welcome-row"><div><div className="studio-eyebrow">INFECTADOZ / FERRAMENTA DE EDIÇÃO</div><h1>Transforme seu gameplay<br/><em>em clips memoráveis.</em></h1><p>Cortes precisos, áudio equilibrado e identificação do servidor. Tudo direto no navegador.</p></div><div className="welcome-stats"><span><Film/><b>{sources.length.toString().padStart(2,"0")}</b> vídeos</span><span><Scissors/><b>{cuts.length.toString().padStart(2,"0")}</b> cortes</span></div></div>
-    <div className="editor-grid"><section className="panel upload-panel"><div className="panel-head"><div><span className="panel-step">01</span><div><h2>Seus vídeos</h2><p>Adicione os gameplays que quer editar.</p></div></div><label className="small-upload"><Plus size={15}/> Adicionar<input type="file" accept="video/*" multiple onChange={(e)=>addFiles(e.currentTarget.files)}/></label></div>
-    {!sources.length ? <label className="drop-area" onDragOver={(e)=>e.preventDefault()} onDrop={(e)=>{e.preventDefault();addFiles(e.dataTransfer.files);}}><input type="file" accept="video/*" multiple onChange={(e)=>addFiles(e.currentTarget.files)}/><span className="drop-icon"><Upload/></span><b>Arraste seus vídeos para cá</b><span>ou <u>escolha do seu dispositivo</u></span><small>MP4, MOV, WebM e outros formatos</small></label> : <div className="source-list">{sources.map((source)=><button key={source.id} className={source.id===activeId?"source-row selected":"source-row"} onClick={()=>setActiveId(source.id)}><span className="source-thumb"><Film/></span><span className="source-meta"><b>{source.file.name}</b><small>{source.duration?formatTime(source.duration):"Carregando…"} · {sizeLabel(source.file.size)}</small></span>{source.id===activeId&&<span className="source-check"><Check/></span>}<span className="remove-source" role="button" onClick={(e)=>{e.stopPropagation();removeSource(source.id);}}><X size={14}/></span></button>)}</div>}
-    <div className="video-preview">{active?<><video ref={videoRef} onLoadedMetadata={loadedMetadata} controls/><div className="video-server-tag"><span className="online-dot"/><b>{SERVER_NAME}</b><code>{SERVER_IP}</code></div></>:<div className="empty-preview"><Play/><span>A prévia do seu gameplay aparece aqui</span></div>}<canvas ref={canvasRef} className="render-canvas"/></div>
-    {active&&<div className="cut-controls"><div className="cut-title"><Scissors size={16}/><b>Marque o corte</b><small>Selecione o trecho que quer exportar.</small></div><div className="time-fields"><label>INÍCIO <span><input type="number" min="0" max={active.duration} step="1" value={start} onChange={(e)=>setStart(Number(e.target.value))}/> s</span></label><span className="time-divider">→</span><label>FIM <span><input type="number" min={start} max={active.duration} step="1" value={end} onChange={(e)=>setEnd(Number(e.target.value))}/> s</span></label><button className="add-cut" disabled={end<=start} onClick={()=>setCuts((old)=>[...old,{id:crypto.randomUUID(),sourceId:active.id,start,end}])}><Plus size={15}/> Adicionar corte</button></div><label className="effect-picker">ACABAMENTO VISUAL <select value={visualEffect} onChange={(e)=>setVisualEffect(e.currentTarget.value)}><option value="none">Original</option><option value="contrast(1.08) saturate(.86) brightness(1.03)">Cinemático</option><option value="saturate(1.35) contrast(1.05)">Cores vivas</option><option value="grayscale(1) contrast(1.12)">Preto e branco</option></select><small>Aplicado a todos os cortes da fila</small></label></div>}
-    </section>
-    <section className="panel sound-panel"><div className="panel-head"><div><span className="panel-step">02</span><div><h2>Som & identidade</h2><p>Encontre o equilíbrio perfeito.</p></div></div><AudioLines className="head-icon"/></div><div className="mix-control"><div className="mix-label"><span className="mix-icon game-icon"><Gamepad2/></span><div><b>Áudio do game</b><small>Som original do gameplay</small></div><strong>{gameVolume}%</strong></div><input aria-label="Volume do áudio do jogo" type="range" min="0" max="150" value={gameVolume} onChange={(e)=>setGameVolume(Number(e.target.value))}/><div className="range-ends"><span>MUDO</span><span>EM DESTAQUE</span></div></div><div className="mix-control music-control"><div className="mix-label"><span className="mix-icon music-icon"><Music2/></span><div><b>Som leve de fundo</b><small>{music?music.name:"Ambiência suave incluída"}</small></div><strong>{musicVolume}%</strong></div><input aria-label="Volume da música de fundo" type="range" min="0" max="60" value={musicVolume} onChange={(e)=>setMusicVolume(Number(e.target.value))}/><div className="range-ends"><span>DESLIGADO</span><label className="music-upload"><Upload size={12}/> Usar minha música<input type="file" accept="audio/*" onChange={(e)=>setMusic(e.currentTarget.files?.[0]||null)}/></label></div></div><audio ref={audioRef} loop className="hidden-audio"/><div className="mix-note"><Volume2/><span>O áudio do jogo fica em destaque. Ajuste o fundo como preferir.</span></div><div className="identity-card"><div className="identity-icon"><Server/></div><div><small>IDENTIDADE NO CLIPE</small><b>{SERVER_NAME}</b><code>{SERVER_IP}</code></div><span className="fixed-chip"><LockKeyhole/> FIXO</span></div><div className="export-info"><HardDrive/><span>O processamento acontece no seu navegador.<br/><b>Seus vídeos não são enviados a um servidor.</b></span></div></section></div>
-    <section className="panel timeline-panel"><div className="panel-head"><div><span className="panel-step">03</span><div><h2>Fila de clips</h2><p>Confira seus cortes antes de gerar os arquivos.</p></div></div>{cuts.length>0&&<button className="clear-cuts" onClick={()=>setCuts([])}>Limpar fila <X size={14}/></button>}</div>{cuts.length?<div className="cuts-list">{cuts.map((cut,index)=>{const source=sources.find((item)=>item.id===cut.sourceId);return <div className="cut-row" key={cut.id}><span className="cut-index">{String(index+1).padStart(2,"0")}</span><span className="cut-film"><Film/></span><span className="cut-name"><b>{source?.file.name||"Vídeo"}</b><small>Trecho {formatTime(cut.start)} – {formatTime(cut.end)}</small></span><span className="cut-duration">{formatTime(cut.end-cut.start)}</span><button aria-label="Remover corte" onClick={()=>setCuts((old)=>old.filter((item)=>item.id!==cut.id))}><X/></button></div>})}</div>:<div className="empty-queue"><Scissors/><span>Seus cortes vão aparecer aqui</span><small>Adicione um ou mais trechos dos vídeos acima.</small></div>}
-    <div className="generate-row"><div className="generate-status">{busy?<><span className="spinner"/>Gerando seus clips… {progress}%</>:message?<><Check/>{message}</>:<><Sparkles/>Pronto para criar. Cada corte vira um vídeo baixável.</>}</div><button className="generate-button" disabled={!cuts.length||busy} onClick={generate}>{busy?<Pause/>:<Sparkles/>}{busy?"Gerando…":"Gerar clips"}<ChevronDown/></button></div>{busy&&<div className="progress-track"><span style={{width:`${progress}%`}}/></div>}</section>
-    {exports.length>0&&<section className="panel exports-panel"><div className="panel-head"><div><span className="panel-step done-step"><Check/></span><div><h2>Seus clips estão prontos</h2><p>Baixe seus vídeos para compartilhar onde quiser.</p></div></div><span className="export-count">{exports.length} ARQUIVO{exports.length>1?"S":""}</span></div><div className="export-list">{exports.map((item)=><article key={item.id} className="export-row"><span className="export-preview"><Play/></span><div className="export-meta"><b>{item.name}</b><small>WEBM · {sizeLabel(item.size)}</small></div><a className="download-button" href={item.url} download={item.name}><Download size={16}/> Baixar vídeo</a></article>)}</div></section>}
-    <footer className="studio-footer"><span>Made for the InfectadoZ community <Gamepad2 size={14}/></span><span>O IP do servidor permanece fixo em todos os clips.</span></footer></section></div>
+    <header className="studio-top"><a className="studio-brand" href="/"><span className="studio-logo"><Gamepad2/></span><span>INFECTADOZ <b>CLIP STUDIO</b></span></a><div className="server-pin"><span className="online-dot"/><div><small>SERVIDOR</small><strong>{serverName || DEFAULT_SERVER}</strong></div><code>{serverIp || DEFAULT_IP}</code></div></header>
+    <div className="studio-content"><div className="intro"><div className="eyebrow"><Sparkles/> EDIÇÃO DE GAMEPLAY, SEM COMPLICAÇÃO</div><h1>Seu melhor gameplay.<br/><em>Em um clip só.</em></h1><p>Envie o vídeo. A gente encontra os momentos de mais ação e monta a compilação.</p></div>
+      <div className="workspace"><section className="main-column"><div className="card video-card"><div className="card-heading"><div><span className="step">01</span><div><h2>Seu vídeo</h2><p>Envie um gameplay para começar.</p></div></div>{file&&<button className="replace-video" onClick={()=>document.getElementById("gameplay-file")?.click()}><Upload/> Trocar vídeo</button>}</div><input id="gameplay-file" className="file-hidden" type="file" accept="video/*" onChange={(e)=>chooseFile(e.currentTarget.files?.[0])}/>
+      {videoUrl?<div className="preview-wrap"><video ref={videoRef} src={videoUrl} controls onLoadedMetadata={(e)=>setDuration(e.currentTarget.duration)}/>{(showCaption||showServer)&&<div className="preview-overlay">{showCaption&&caption&&<b>{caption}</b>}{showServer&&<span>{serverName||DEFAULT_SERVER}{serverIp&&` · ${serverIp}`}</span>}</div>}<canvas ref={canvasRef} className="hidden-canvas"/></div>:<label className="drop-zone" htmlFor="gameplay-file" onDragOver={(e)=>e.preventDefault()} onDrop={(e)=>{e.preventDefault();chooseFile(e.dataTransfer.files[0]);}}><span className="upload-icon"><Upload/></span><b>Arraste seu vídeo para cá</b><span>ou <u>escolha um arquivo</u></span><small>MP4, MOV ou WebM</small></label>}
+      {file&&<div className="file-info"><span><strong>{file.name}</strong><small>{duration?`${timeLabel(duration)} · `:""}{(file.size/1024/1024).toFixed(1)} MB</small></span><button aria-label="Remover vídeo" onClick={()=>setFile(null)}>×</button></div>}
+      </div><div className="card generate-card"><div className="generate-explain"><span className="magic-icon"><Scissors/></span><div><b>{busy?"Trabalhando no seu vídeo…":"Compilação automática"}</b><small>{busy?status:"Vamos analisar o vídeo inteiro e selecionar os melhores momentos."}</small></div></div><button className="generate-button" disabled={!file||!duration||busy} onClick={generate}>{busy?<><span className="spinner"/> {progress}%</>:<><Sparkles/> Gerar minha compilação</>}</button>{busy&&<div className="progress-track"><span style={{width:`${progress}%`}}/></div>}{!busy&&status&&<p className="result-status">{status}</p>}</div>
+      {output&&<section className="card result-card"><div className="card-heading"><div><span className="step complete">✓</span><div><h2>Sua compilação está pronta</h2><p>Os melhores momentos, reunidos em um vídeo.</p></div></div></div><video src={output} controls/><a className="download-button" href={output} download={outputName}><Download/> Baixar compilação</a></section>}
+      </section><aside className="settings-column"><section className="card settings-card"><div className="card-heading"><div><span className="step">02</span><div><h2>Personalize</h2><p>Escolha o que aparece no clip.</p></div></div></div><label className="check-row"><input type="checkbox" checked={showCaption} onChange={(e)=>setShowCaption(e.target.checked)}/><span>Mostrar frase</span></label>{showCaption&&<input className="text-input" value={caption} maxLength={70} onChange={(e)=>setCaption(e.target.value)} placeholder="Escreva sua frase"/>}<label className="check-row"><input type="checkbox" checked={showServer} onChange={(e)=>setShowServer(e.target.checked)}/><span>Mostrar servidor e IP</span></label>{showServer&&<><input className="text-input" value={serverName} maxLength={30} onChange={(e)=>setServerName(e.target.value)} placeholder="Nome do servidor"/><input className="text-input" value={serverIp} maxLength={40} onChange={(e)=>setServerIp(e.target.value)} placeholder="IP do servidor"/></>}
+      </section><section className="card settings-card sound-card"><div className="card-heading"><div><span className="step">03</span><div><h2>Áudio</h2><p>Deixe o jogo em destaque.</p></div></div><Volume2/></div><label className="slider-label"><span><Gamepad2/> Som do jogo <b>{gameVolume}%</b></span><input aria-label="Volume do som do jogo" type="range" min="0" max="150" value={gameVolume} onChange={(e)=>setGameVolume(Number(e.target.value))}/></label><label className="slider-label"><span><Music2/> Música de fundo <b>{musicVolume}%</b></span><input aria-label="Volume da música de fundo" type="range" min="0" max="60" value={musicVolume} onChange={(e)=>setMusicVolume(Number(e.target.value))}/></label><label className="music-file">{musicFile?<span>{musicFile.name}</span>:<span><Upload/> Adicionar sua música</span>}<input type="file" accept="audio/*" onChange={(e)=>setMusicFile(e.currentTarget.files?.[0]||null)}/></label><audio ref={musicRef} loop className="hidden-audio"/></section><div className="privacy-note"><span>✓</span><p>Seus arquivos são processados neste navegador e não são enviados para um servidor.</p></div></aside></div>
+      <footer className="studio-footer"><span><Gamepad2/> InfectadoZ Clip Studio</span><span>A análise seleciona trechos com mais movimento visual.</span></footer>
+    </div>
   </main>;
 }
 
