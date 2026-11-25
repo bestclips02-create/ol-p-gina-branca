@@ -158,16 +158,40 @@ export function Studio() {
     ctx.save(); ctx.filter = style.filter;
     ctx.translate(canvas.width / 2 + shakeX, canvas.height / 2 + shakeY); ctx.scale(zoom, zoom);
     ctx.drawImage(player, -frameWidth/2, -frameHeight/2, frameWidth, frameHeight); ctx.restore();    if (style.id === "retro" && power > .15) { ctx.save(); ctx.globalAlpha = .08 * power; ctx.fillStyle = "#10100c"; for (let y = 0; y < canvas.height; y += Math.max(3, Math.round(canvas.height / 190))) ctx.fillRect(0, y, canvas.width, 1); ctx.restore(); }
-    const lines = [showCaption && caption.trim(), showServer && [serverName.trim(), serverIp.trim()].filter(Boolean).join("  ·  ")].filter(Boolean) as string[];
+    const captionText = showCaption ? caption.trim() : "";
+    const serverText = showServer ? [serverName.trim(), serverIp.trim()].filter(Boolean).join("  ·  ") : "";
     const fade = Math.max(.07, style.fade * (1.2 - power * .55));
     const alpha = Math.min(1, progress / fade, (1 - progress) / fade), enter = Math.max(0, 1 - progress / fade);
-    if (lines.length) {
-      const scale = Math.min(canvas.width / 1280, 1.5), pad = Math.round(22 * scale), fontSize = Math.max(12, Math.round((20 + 3 * power) * scale));
+    if (captionText || serverText) {
+      const portrait = canvas.height > canvas.width;
+      const scale = portrait ? canvas.width / 720 : Math.min(canvas.width / 1280, 1.5);
+      const pad = Math.round((portrait ? 24 : 22) * scale);
+      const fontSize = Math.max(portrait ? 18 : 12, Math.round(((portrait ? 24 : 20) + 3 * power) * scale));
       ctx.save(); ctx.globalAlpha = Math.max(0, alpha); ctx.font = `600 ${fontSize}px ${style.font}`;
-      const width = Math.min(canvas.width * .82, Math.max(...lines.map((line) => ctx.measureText(line).width)) + pad * 2);
-      const height = lines.length * (fontSize + 8 * scale) + pad * 1.5, x = pad + enter * 14 * scale, y = canvas.height - height - pad;
-      ctx.fillStyle = "rgba(7,12,9,.78)"; ctx.beginPath(); ctx.roundRect(x, y, width, height, 10 * scale); ctx.fill();
-      lines.forEach((line, index) => { ctx.fillStyle = index === 0 && lines.length > 1 ? style.accent : "#ffffff"; ctx.fillText(line, x + pad, y + pad + fontSize + index * (fontSize + 8 * scale), width - pad * 2); }); ctx.restore();
+      const maxLineWidth = canvas.width * (portrait ? .9 : .78) - pad * 2;
+      const wrap = (text: string, accent: boolean) => {
+        const words = text.split(/\\s+/).filter(Boolean), rows: { text: string; accent: boolean }[] = [];
+        let row = "";
+        for (const word of words) {
+          const candidate = row ? `${row} ${word}` : word;
+          if (row && ctx.measureText(candidate).width > maxLineWidth) { rows.push({ text: row, accent }); row = word; }
+          else row = candidate;
+        }
+        if (row) rows.push({ text: row, accent });
+        return rows;
+      };
+      const rows = [...wrap(captionText, true), ...wrap(serverText, false)];
+      const width = Math.min(canvas.width * (portrait ? .94 : .82), Math.max(...rows.map((row) => ctx.measureText(row.text).width)) + pad * 2);
+      const lineGap = Math.round(7 * scale), rowHeight = fontSize + lineGap;
+      const height = rows.length * rowHeight + pad * 1.5;
+      const x = (canvas.width - width) / 2 + enter * 10 * scale, y = canvas.height - height - (portrait ? canvas.height * .055 : pad);
+      ctx.fillStyle = "rgba(7,12,9,.84)"; ctx.beginPath(); ctx.roundRect(x, y, width, height, 10 * scale); ctx.fill();
+      rows.forEach((row, index) => {
+        ctx.fillStyle = row.accent ? style.accent : "#ffffff";
+        ctx.textAlign = "left";
+        ctx.fillText(row.text, x + pad, y + pad + fontSize + index * rowHeight, width - pad * 2);
+      });
+      ctx.restore();
     }
     const fadeOut = Math.max(0, (.035 - progress) / .035, (progress - .965) / .035);
     if (fadeOut > 0) { ctx.fillStyle = `rgba(0,0,0,${Math.min(.6, fadeOut * .45 * power)})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
