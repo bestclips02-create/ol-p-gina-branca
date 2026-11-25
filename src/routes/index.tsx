@@ -1,36 +1,32 @@
+import { useState } from "react";
+import { ArrowRight, ArrowUpRight, Check, ChevronDown, Menu, X } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
+import "./index.css";
 
-const description =
-  "Criação de sites profissionais com hospedagem, infraestrutura, manutenção técnica e suporte. Sua empresa online sem complicação com a ORYZON CODE.";
-const title =
-  "ORYZON CODE | Sites Profissionais e Presença Digital Gerenciada";
+const title = "ORYZON CODE | Seu site cuidado por quem entende";
+const description = "Seu negócio merece uma presença digital profissional. A ORYZON cria, publica e cuida do seu site com suporte contínuo.";
+const whatsapp = "https://wa.me/19994589544?text=Ol%C3%A1%2C%20quero%20conhecer%20a%20ORYZON%20CODE";
 
 export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title },
-      { name: "description", content: description },
-      { name: "author", content: "ORYZON CODE" },
-      { property: "og:title", content: title },
-      { property: "og:description", content: description },
-      { property: "og:type", content: "website" },
-      { property: "og:url", content: "/" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: title },
-      { name: "twitter:description", content: description },
-    ],
-  }),
+  head: () => ({ meta: [{ title }, { name: "description", content: description }, { property: "og:title", content: title }, { property: "og:description", content: description }, { property: "og:type", content: "website" }] }),
   component: Index,
 });
 
 function Index() {
-  return (
-    <main className="h-svh w-full overflow-hidden bg-[#05070A]">
-      <iframe
-        title="ORYZON CODE — Presença digital gerenciada"
-        src="/oryzon-code.html"
-        className="block h-full w-full border-0"
-      />
-    </main>
-  );
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  return <main className="site-shell">
+    <header className="topbar"><a href="#inicio" className="brand" aria-label="ORYZON CODE início"><span className="brand-mark">O</span><span>ORYZON<span className="brand-light">CODE</span></span></a>
+      <button className="menu-toggle" aria-label={open ? "Fechar menu" : "Abrir menu"} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? <X/> : <Menu/>}</button>
+      <nav className={open ? "nav is-open" : "nav"}><a href="#como-funciona" onClick={close}>Como funciona</a><a href="#cuidado" onClick={close}>O que está incluso</a><a href="#planos" onClick={close}>Investimento</a><a href="#duvidas" onClick={close}>Dúvidas</a><a className="nav-cta" href={whatsapp} target="_blank" rel="noreferrer">Vamos conversar <ArrowUpRight size={16}/></a></nav>
+    </header>
+    <section id="inicio" className="hero section-wrap"><div className="hero-copy"><div className="eyebrow"><span className="live-dot"/> PRESENÇA DIGITAL GERENCIADA</div><h1>Seu negócio merece um site.<br/><em>E merece ser bem cuidado.</em></h1><p className="hero-lede">A gente cria, publica e mantém sua presença digital funcionando. Você foca no negócio; a ORYZON cuida da parte técnica.</p><div className="hero-actions"><a className="button button-primary" href={whatsapp} target="_blank" rel="noreferrer">Quero meu site <ArrowRight size={18}/></a><a className="text-link" href="#como-funciona">Entenda como funciona <span>↓</span></a></div><div className="trust-row"><span><Check/> Hospedagem gerenciada</span><span><Check/> Suporte contínuo</span><span><Check/> Feito para celular</span></div></div>
+    <div className="preview-card"><div className="preview-top"><span className="window-dots"><i/><i/><i/></span><span>PRÉVIA ILUSTRATIVA</span><span className="preview-lock">● CONEXÃO SEGURA</span></div><div className="mock-site"><div className="mock-nav"><b>solarys<span>.</span></b><div>Início　 Soluções　 Sobre　 Contato</div><button>Fale com um especialista ↗</button></div><div className="mock-hero"><div><label>ENERGIA LIMPA. FUTURO INTELIGENTE.</label><h2>O sol pode<br/>trabalhar por você.</h2><p>Uma ideia de como sua empresa pode se apresentar online.</p><button>Descubra a energia solar　↗</button></div><div className="sun-art"><div className="sun"/><div className="panel p1"/><div className="panel p2"/><div className="panel p3"/></div></div><div className="mock-bottom"><span>☀ Energia que transforma</span><span>◇ Projeto demonstrativo</span><span>↗ Design responsivo</span></div></div><div className="preview-caption"><span>UM SITE COM A CARA DO SEU NEGÓCIO</span><span>Ilustração de projeto <b>↗</b></span></div></div></section>
+    <div className="proof-strip"><span>DO PRIMEIRO RASCUNHO À PUBLICAÇÃO</span><span className="proof-line"/><span>UM SÓ TIME CUIDA DO SEU SITE</span><span className="proof-line"/><span>TRANSPARÊNCIA EM CADA ETAPA</span></div>
+    <section id="como-funciona" className="section-wrap process section-pad"><div className="section-intro"><div className="eyebrow">SIMPLES DO COMEÇO AO FIM</div><h2>Presença digital,<br/><em>sem complicação.</em></h2><p>Você não precisa juntar ferramentas, fornecedores e termos técnicos. A ORYZON acompanha o projeto e mantém tudo em ordem.</p></div><div className="steps"><article><span className="step-no">01 / CONVERSA</span><h3>Entendemos seu negócio</h3><p>Alinhamos seus objetivos, o público e o que o site precisa fazer.</p></article><article><span className="step-no">02 / CRIAÇÃO</span><h3>Desenhamos sua presença</h3><p>Montamos a estrutura e o visual com base no escopo combinado.</p></article><article><span className="step-no">03 / APROVAÇÃO</span><h3>Você revisa com calma</h3><p>Apresentamos o projeto para sua aprovação antes de publicar.</p></article><article><span className="step-no">04 / CUIDADO</span><h3>Publicamos e cuidamos</h3><p>Conectamos seu domínio quando possível e seguimos ao seu lado.</p></article></div></section>
+    <section id="cuidado" className="care-section"><div className="section-wrap care-layout"><div className="care-heading"><div className="eyebrow">ORYZON CARE</div><h2>Seu site não fica<br/><em>por sua conta.</em></h2><p>Depois de publicado, cuidamos da infraestrutura e da manutenção para você ter uma presença digital acompanhada.</p><a className="text-link" href="#planos">Ver investimento <span>↓</span></a></div><div className="care-grid"><article><div className="feature-icon">01</div><h3>Hospedagem & SSL</h3><p>Infraestrutura gerenciada e conexão protegida para seu site.</p></article><article><div className="feature-icon">02</div><h3>Manutenção técnica</h3><p>Acompanhamento e cuidados para manter tudo funcionando.</p></article><article><div className="feature-icon">03</div><h3>Experiência responsiva</h3><p>Uma navegação pensada para celular, tablet e computador.</p></article><article><div className="feature-icon">04</div><h3>Suporte próximo</h3><p>Conte com atendimento técnico para as necessidades do site.</p></article></div></div></section>
+    <section id="planos" className="section-wrap pricing section-pad"><div className="pricing-heading"><div><div className="eyebrow">CLAREZA PARA PLANEJAR</div><h2>Um começo simples.<br/><em>Um site bem cuidado.</em></h2></div><p>Valores apresentados antes de começar, com condições e escopo alinhados com você.</p></div><div className="price-cards"><article className="price-card"><div className="price-kicker">PROJETO INICIAL</div><h3>Implantação</h3><p className="price-desc">Criação e publicação do seu site conforme o escopo aprovado.</p><div className="price"><span>R$</span>149<small>,90</small></div><div className="price-note">valor total · 50% no início e 50% após aprovação final</div><div className="divider"/><ul><li><Check/> Criação da estrutura do site</li><li><Check/> Layout adaptável para celular</li><li><Check/> Configuração e publicação</li><li><Check/> Conexão de domínio quando possível</li></ul><a className="button button-outline" href={whatsapp} target="_blank" rel="noreferrer">Conversar sobre meu projeto <ArrowRight size={17}/></a></article><article className="price-card featured"><div className="care-badge">CUIDADO CONTÍNUO</div><div className="price-kicker">DEPOIS DA PUBLICAÇÃO</div><h3>ORYZON Care</h3><p className="price-desc">Acompanhamento técnico e infraestrutura gerenciada para seu site.</p><div className="price"><span>R$</span>89<small>,90</small><b>/ mês</b></div><div className="price-note">conforme condições apresentadas na contratação</div><div className="divider"/><ul><li><Check/> Hospedagem gerenciada</li><li><Check/> Certificado SSL</li><li><Check/> Manutenção técnica</li><li><Check/> Suporte para o site</li></ul><a className="button button-primary" href={whatsapp} target="_blank" rel="noreferrer">Quero saber mais <ArrowRight size={17}/></a></article></div><p className="scope-note">Tudo começa com um escopo alinhado. Alterações ou recursos fora do combinado são avaliados e orçados antes de qualquer execução.</p></section>
+    <section id="duvidas" className="faq-section"><div className="section-wrap faq-layout"><div><div className="eyebrow">SEM LETRAS MIÚDAS</div><h2>Dúvidas<br/><em>frequentes.</em></h2><p>Se ainda tiver alguma dúvida, fale com a gente. Vamos explicar cada etapa.</p><a className="text-link" href={whatsapp} target="_blank" rel="noreferrer">Chamar no WhatsApp <ArrowUpRight size={16}/></a></div><div className="faq-list"><details><summary>O que estou contratando?<ChevronDown/></summary><p>A implantação cobre a criação e publicação do site dentro do escopo combinado. O ORYZON Care cobre hospedagem gerenciada, SSL, manutenção técnica e suporte, conforme as condições apresentadas na contratação.</p></details><details><summary>Como funciona o pagamento da implantação?<ChevronDown/></summary><p>O valor de R$ 149,90 é dividido em duas partes: 50% no início e 50% após sua aprovação final, antes da publicação.</p></details><details><summary>Em quanto tempo meu site fica pronto?<ChevronDown/></summary><p>O prazo depende da complexidade do projeto e do envio dos materiais e informações necessários. Combinamos a previsão antes de começar.</p></details><details><summary>Posso pedir mudanças depois?<ChevronDown/></summary><p>Sim. Mudanças dentro do escopo alinhado fazem parte das revisões combinadas. Novos recursos ou alterações fora do escopo são avaliados e orçados previamente.</p></details><details><summary>Posso cancelar o serviço?<ChevronDown/></summary><p>As condições de cancelamento são apresentadas nos Termos de Serviço antes da contratação.</p></details></div></div></section>
+    <footer className="footer"><div className="section-wrap footer-main"><a href="#inicio" className="brand"><span className="brand-mark">O</span><span>ORYZON<span className="brand-light">CODE</span></span></a><div className="footer-message">Você cuida do seu negócio.<br/><em>A ORYZON cuida do seu site.</em></div><a className="button button-primary" href={whatsapp} target="_blank" rel="noreferrer">Vamos conversar <ArrowUpRight size={18}/></a></div><div className="section-wrap footer-bottom"><span>© {new Date().getFullYear()} ORYZON CODE</span><span>Presença digital gerenciada com cuidado.</span><a href="#duvidas">Termos e dúvidas</a></div></footer>
+  </main>;
 }
