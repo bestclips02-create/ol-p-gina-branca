@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Studio } from "./studio";
+import { Studio } from "../components/clip-studio";
 
 const title = "InfectadoZ Clip Studio | Editor de vídeos de gameplay";
 const description = "Crie clips de gameplay, ajuste o áudio, aplique efeitos visuais e baixe seus vídeos com a identificação do servidor InfectadoZ.";
@@ -16,3 +16,4 @@ export const Route = createFileRoute("/")({
   }),
   component: Studio,
 });
+
