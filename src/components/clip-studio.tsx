@@ -211,7 +211,7 @@ export function Studio() {
     paint();
     player.addEventListener("timeupdate", paint); player.addEventListener("seeked", paint); player.addEventListener("play", paint); player.addEventListener("pause", paint);
     return () => { cancelAnimationFrame(frame); player.removeEventListener("timeupdate", paint); player.removeEventListener("seeked", paint); player.removeEventListener("play", paint); player.removeEventListener("pause", paint); };
-  }, [duration, orientation, direction, intensity, manualRange, trimStart, trimEnd, caption, serverName, serverIp, showCaption, showServer]);
+  }, [duration, orientation, direction, intensity, effects, manualRange, trimStart, trimEnd, caption, serverName, serverIp, showCaption, showServer]);
   const generate = async () => {
     const player = videoRef.current, canvas = canvasRef.current;
     if (!player || !canvas || !file || busy) return;
@@ -232,7 +232,7 @@ export function Studio() {
       recorder.start(300);
       for (let index = 0; index < moments.length; index++) {
         if (index > 0) { recorder.pause(); player.pause(); if (musicRef.current) musicRef.current.pause(); }
-        const moment = moments[index]; await seek(player, moment.start); drawFrame(player, canvas, moment, direction, intensity);
+        const moment = moments[index]; await seek(player, moment.start); drawFrame(player, canvas, moment, direction, intensity, effects);
         if (index > 0) recorder.resume();
         if (musicFile && musicRef.current) { if (index === 0) musicRef.current.currentTime = 0; await musicRef.current.play().catch(() => {}); }
         await player.play();
